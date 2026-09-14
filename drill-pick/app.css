@@ -1,0 +1,448 @@
+/* Drill Pick — canvas-and-drills visual language.
+   Light theme = the printed canvas. Dark theme = working under a lamp.
+   Wedge colours come from wheel-core.js and stay fixed in both themes:
+   a drill colour is the subject's material, not a UI accent. */
+
+:root {
+  /* neutrals carry a violet bias so they read as chosen, not defaulted */
+  --ground: #F1EDF7;
+  --surface-sunk: #F7F4FB;
+  --ink: #221A2E;
+  --ink-soft: #5E566E;
+  --ink-faint: #8B8296;
+  --line: #E2DAEE;
+  --line-strong: #CDC1DE;
+  --accent: #6A3BB0;
+  --accent-soft: #EDE3FB;
+  --on-accent: #FFFFFF;
+  --tray: #241D31;
+  --tray-rim: #453A5C;
+  --tray-ink: #E9E1F5;
+  --glow: rgba(106, 59, 176, 0.18);
+  --shadow-wheel: 0 26px 60px -30px rgba(36, 20, 66, 0.55);
+  --wheel-drop: 0 14px 22px rgba(46, 26, 82, 0.28);
+
+  --font-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --font-body: 'Karla', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --step-0: 0.8125rem;
+  --step-1: 0.9375rem;
+  --step-2: 1.0625rem;
+  --step-3: 1.375rem;
+  --step-4: 2.125rem;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ground: #141021;
+    --surface-sunk: #191428;
+    --ink: #F0EAF9;
+    --ink-soft: #B0A6C4;
+    --ink-faint: #7E7392;
+    --line: #2E2743;
+    --line-strong: #453B60;
+    --accent: #B387F5;
+    --accent-soft: #2A2140;
+    --on-accent: #1A1228;
+    --tray: #0E0B18;
+    --tray-rim: #3A3052;
+    --tray-ink: #EFE8FA;
+    --glow: rgba(179, 135, 245, 0.22);
+    --shadow-wheel: 0 30px 70px -34px rgba(0, 0, 0, 0.9);
+    --wheel-drop: 0 16px 26px rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --ground: #141021;
+  --surface-sunk: #191428;
+  --ink: #F0EAF9;
+  --ink-soft: #B0A6C4;
+  --ink-faint: #7E7392;
+  --line: #2E2743;
+  --line-strong: #453B60;
+  --accent: #B387F5;
+  --accent-soft: #2A2140;
+  --on-accent: #1A1228;
+  --tray: #0E0B18;
+  --tray-rim: #3A3052;
+  --tray-ink: #EFE8FA;
+  --glow: rgba(179, 135, 245, 0.22);
+  --shadow-wheel: 0 30px 70px -34px rgba(0, 0, 0, 0.9);
+  --wheel-drop: 0 16px 26px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: var(--ground);
+  /* the faint drill grid of an unworked canvas */
+  background-image: radial-gradient(var(--line-strong) 0.7px, transparent 0.8px);
+  background-size: 14px 14px;
+  background-position: -1px -1px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-1);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+.shell {
+  max-width: 470px;
+  margin-inline: auto;
+  padding-inline: 20px;
+  padding-block: 20px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wordmark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-size: var(--step-3);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.wordmark .gem { color: var(--accent); }
+
+.masthead p {
+  margin: 0;
+  font-size: var(--step-0);
+  color: var(--ink-soft);
+}
+
+/* ---------- wheel ---------- */
+
+.stage {
+  position: relative;
+  width: min(80vw, 320px);
+  aspect-ratio: 1;
+  margin-inline: auto;
+  isolation: isolate;
+}
+
+.stage__tap {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.stage__tap:disabled { cursor: default; }
+
+.stage__tap:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.spinner {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(var(--wheel-drop));
+  will-change: transform;
+}
+
+.spinner svg { display: block; width: 100%; height: 100%; }
+
+.wedge-label {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 3.8px;
+  letter-spacing: 0.005em;
+  fill: #FFFFFF;
+  paint-order: stroke;
+  stroke: rgba(24, 12, 40, 0.35);
+  stroke-width: 0.9px;
+  stroke-linejoin: round;
+}
+
+.wedge-symbol {
+  font-size: 4.3px;
+  fill: rgba(255, 255, 255, 0.92);
+}
+
+.is-out .wedge-label,
+.is-out .wedge-symbol { opacity: 0.34; }
+
+.sparkle { animation: twinkle 5.5s ease-in-out infinite; transform-origin: center; }
+.sparkle:nth-of-type(2) { animation-delay: 1.9s; }
+.sparkle:nth-of-type(3) { animation-delay: 3.4s; }
+
+@keyframes twinkle {
+  0%, 72%, 100% { opacity: 0; }
+  80% { opacity: 0.85; }
+  88% { opacity: 0.1; }
+}
+
+/* the applicator-pen tip that marks the winning wedge */
+.pointer {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  translate: -50% 0;
+  width: 26px;
+  height: 40px;
+  z-index: 2;
+  filter: drop-shadow(0 4px 6px rgba(20, 8, 40, 0.45));
+}
+
+.pointer svg { display: block; width: 100%; height: 100%; }
+
+.is-spinning .pointer { animation: tick 0.34s linear infinite; transform-origin: 50% 12%; }
+
+@keyframes tick {
+  0%, 100% { rotate: 0deg; }
+  40% { rotate: 7deg; }
+}
+
+/* the drill tray at the axle, held still while the wheel turns */
+.hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: 27%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, var(--tray-rim), var(--tray) 68%);
+  border: 1px solid var(--tray-rim);
+  box-shadow: inset 0 2px 6px rgba(255, 255, 255, 0.09), 0 6px 16px rgba(16, 6, 32, 0.5);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.hub::after {
+  content: '';
+  position: absolute;
+  inset: 17%;
+  border-radius: 50%;
+  border: 1px dashed rgba(233, 225, 245, 0.24);
+}
+
+.hub span {
+  font-size: 1.05rem;
+  color: var(--tray-ink);
+  line-height: 1;
+}
+
+/* ---------- verdict ---------- */
+
+.verdict {
+  border-left: 4px solid var(--verdict-color, var(--line-strong));
+  padding: 2px 0 2px 14px;
+  min-height: 74px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.verdict__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.verdict__name {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-size: var(--step-4);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.verdict__note {
+  font-size: var(--step-0);
+  color: var(--ink-soft);
+}
+
+.verdict.is-waiting .verdict__name {
+  font-size: var(--step-3);
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+/* ---------- spin button ---------- */
+
+.spin {
+  display: block;
+  width: 100%;
+  padding: 15px 20px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--step-2);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -12px var(--glow);
+  transition: transform 0.12s ease, filter 0.2s ease;
+}
+
+.spin:hover:not(:disabled) { filter: brightness(1.07); }
+.spin:active:not(:disabled) { transform: translateY(1px) scale(0.995); }
+.spin:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+.spin:disabled {
+  background: var(--surface-sunk);
+  color: var(--ink-faint);
+  box-shadow: none;
+  cursor: default;
+}
+
+/* ---------- legend ---------- */
+
+.legend { display: flex; flex-direction: column; gap: 10px; }
+
+.legend__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.legend__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.legend__hint { font-size: var(--step-0); color: var(--ink-faint); }
+
+.legend ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 1px;
+  padding-block: 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child { border-bottom: 0; }
+
+.chip {
+  grid-row: span 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--chip);
+  color: #FFFFFF;
+  font-size: 0.9rem;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -3px 6px rgba(0, 0, 0, 0.22);
+}
+
+.row.is-out .chip { opacity: 0.36; }
+.row.is-out .name { color: var(--ink-soft); }
+
+.name {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px dotted var(--line-strong);
+  border-radius: 0;
+  padding: 3px 2px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-1);
+  font-weight: 600;
+}
+
+.name::placeholder { color: var(--ink-faint); font-weight: 400; font-style: italic; }
+.name:hover { border-bottom-color: var(--accent); }
+
+.name:focus {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.meta {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--ink-faint);
+  padding-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta em { font-style: normal; color: var(--accent); }
+
+/* ---------- footer ---------- */
+
+.colophon {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+/* ---------- drill shower ---------- */
+
+.drill {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 20;
+  background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.92), var(--drill) 58%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { transition: none !important; }
+  .sparkle, .is-spinning .pointer { animation: none; }
+  .sparkle { opacity: 0.25; }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "Drill Pick",
+  "short_name": "Drill Pick",
+  "description": "A five-spot spinning wheel that picks your next diamond painting and never repeats the last one.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#141021",
+  "theme_color": "#141021",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
