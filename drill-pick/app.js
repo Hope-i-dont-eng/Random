@@ -86,7 +86,7 @@ document.getElementById('app').innerHTML = `
   <div class="shell">
     <header class="masthead">
       <h1 class="wordmark"><span class="gem">◆</span> Drill Pick</h1>
-      <p>Five WIPs, one spin</p>
+      <p>${core.SPOT_COUNT} WIPs, one spin</p>
     </header>
 
     <div class="stage" id="stage">
@@ -140,7 +140,7 @@ const verdictNote = document.getElementById('verdictNote');
 
 function paintWheel() {
   const parts = [
-    `<svg viewBox="0 0 100 100" role="img" aria-label="Wheel of five diamond painting projects">`,
+    `<svg viewBox="0 0 100 100" role="img" aria-label="Wheel of ${core.SPOT_COUNT} diamond painting projects">`,
     `<defs><radialGradient id="dpSheen" cx="34%" cy="26%" r="78%">` +
       `<stop offset="0%" stop-color="#fff" stop-opacity="0.26"/>` +
       `<stop offset="55%" stop-color="#fff" stop-opacity="0.04"/>` +
@@ -270,7 +270,7 @@ function paintVerdict(mode, index) {
     verdict.style.setProperty('--verdict-color', 'var(--line-strong)');
     verdictEyebrow.textContent = 'Ready';
     verdictName.textContent = 'Spin to pick your next canvas';
-    verdictNote.textContent = 'All five spots are in play.';
+    verdictNote.textContent = `All ${core.SPOT_COUNT} spots are in play.`;
   } else {
     const entry = core.LEGEND[last];
     verdict.style.setProperty('--verdict-color', entry.color);

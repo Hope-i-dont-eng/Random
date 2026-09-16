@@ -11,16 +11,27 @@ function test(name, fn) {
   console.log('  ok  ' + name);
 }
 
-test('starts with all five spots in play', () => {
+const ALL = core.LEGEND.map((_, i) => i);
+
+test('starts with every spot in play', () => {
   const s = core.createInitialState();
+  assert.equal(core.SPOT_COUNT, core.LEGEND.length);
   assert.equal(s.spots.length, core.SPOT_COUNT);
-  assert.deepEqual(core.eligibleIndices(s), [0, 1, 2, 3, 4]);
+  assert.deepEqual(core.eligibleIndices(s), ALL);
   assert.equal(core.canSpin(s), true);
+  assert.equal(s.spots.every((spot) => spot.name.trim() !== ''), true, 'every spot needs a starter');
+});
+
+test('the legend has no duplicate colours, symbols or codes', () => {
+  for (const key of ['color', 'symbol', 'dmc']) {
+    const values = core.LEGEND.map((entry) => entry[key]);
+    assert.equal(new Set(values).size, values.length, 'duplicate ' + key);
+  }
 });
 
 test('the last pick sits out the next spin', () => {
   let s = core.recordPick(core.createInitialState(), 2);
-  assert.deepEqual(core.eligibleIndices(s), [0, 1, 3, 4]);
+  assert.deepEqual(core.eligibleIndices(s), ALL.filter((i) => i !== 2));
   assert.equal(core.isSittingOut(s, 2), true);
   for (let i = 0; i < 400; i++) assert.notEqual(core.pick(s), 2);
 });
@@ -28,13 +39,13 @@ test('the last pick sits out the next spin', () => {
 test('every other spot stays reachable', () => {
   const s = core.recordPick(core.createInitialState(), 0);
   const seen = new Set();
-  for (let i = 0; i < 2000; i++) seen.add(core.pick(s));
-  assert.deepEqual([...seen].sort(), [1, 2, 3, 4]);
+  for (let i = 0; i < 4000; i++) seen.add(core.pick(s));
+  assert.deepEqual([...seen].sort((a, b) => a - b), ALL.filter((i) => i !== 0));
 });
 
 test('pick never falls off the end of the pool', () => {
   const s = core.createInitialState();
-  assert.equal(core.pick(s, () => 0.999999999), 4);
+  assert.equal(core.pick(s, () => 0.999999999), core.SPOT_COUNT - 1);
   assert.equal(core.pick(s, () => 0), 0);
 });
 
@@ -42,20 +53,21 @@ test('blank spots are skipped', () => {
   let s = core.createInitialState();
   s = core.rename(s, 1, '');
   s = core.rename(s, 3, '   ');
-  assert.deepEqual(core.eligibleIndices(s), [0, 2, 4]);
+  assert.deepEqual(core.eligibleIndices(s), ALL.filter((i) => i !== 1 && i !== 3));
 });
 
 test('a single named spot can still win, even as the last pick', () => {
+  const last = core.SPOT_COUNT - 1;
   let s = core.createInitialState();
-  [0, 1, 2, 3].forEach((i) => { s = core.rename(s, i, ''); });
-  s = { ...s, lastPickId: s.spots[4].id };
+  ALL.filter((i) => i !== last).forEach((i) => { s = core.rename(s, i, ''); });
+  s = { ...s, lastPickId: s.spots[last].id };
   assert.equal(core.canSpin(s), true);
-  assert.equal(core.pick(s), 4);
+  assert.equal(core.pick(s), last);
 });
 
 test('nothing named means nothing to spin', () => {
   let s = core.createInitialState();
-  [0, 1, 2, 3, 4].forEach((i) => { s = core.rename(s, i, ''); });
+  ALL.forEach((i) => { s = core.rename(s, i, ''); });
   assert.equal(core.canSpin(s), false);
   assert.equal(core.pick(s), null);
 });
@@ -64,7 +76,7 @@ test('renaming a sitting-out spot releases it', () => {
   let s = core.recordPick(core.createInitialState(), 2);
   s = core.rename(s, 2, 'Lighthouse');
   assert.equal(s.lastPickId, null);
-  assert.deepEqual(core.eligibleIndices(s), [0, 1, 2, 3, 4]);
+  assert.deepEqual(core.eligibleIndices(s), ALL);
 });
 
 test('renaming a different spot leaves the exclusion alone', () => {
@@ -81,8 +93,32 @@ test('names are capped and no-op renames change nothing', () => {
   assert.equal(core.rename(s, 0, s.spots[0].name), s);
 });
 
+test('a save from a smaller wheel keeps its names and leaves new spots empty', () => {
+  // what an existing phone has stored from the five-wedge version
+  const old = {
+    version: 1,
+    seeded: false,
+    spots: [
+      { id: 's1', name: 'Moonlit Wolf' },
+      { id: 's2', name: 'Harbour Lights' },
+      { id: 's3', name: 'Koi Pond' },
+      { id: 's4', name: 'Stained Glass Owl' },
+      { id: 's5', name: 'Aurora Cabin' },
+    ],
+    lastPickId: 's3',
+  };
+  const next = core.hydrate(old);
+  assert.equal(next.spots.length, core.SPOT_COUNT);
+  old.spots.forEach((spot, i) => assert.equal(next.spots[i].name, spot.name));
+  for (let i = old.spots.length; i < core.SPOT_COUNT; i++) {
+    assert.equal(next.spots[i].name, '', 'a new spot must not invent a name');
+  }
+  assert.equal(next.lastPickId, 's3', 'the sitting-out spot survives the upgrade');
+  assert.equal(core.isSittingOut(next, 2), true);
+});
+
 test('hydrate repairs junk and keeps good saves', () => {
-  assert.deepEqual(core.hydrate(null).spots.length, 5);
+  assert.deepEqual(core.hydrate(null).spots.length, core.SPOT_COUNT);
   assert.deepEqual(core.hydrate({ version: 99 }).lastPickId, null);
   assert.equal(core.hydrate({ version: 1, spots: 'nope' }).seeded, true);
   assert.equal(core.hydrate({ version: 1, spots: [], lastPickId: 'ghost' }).lastPickId, null);
@@ -99,7 +135,7 @@ test('storage failures never break the app', () => {
     setItem() { throw new Error('blocked'); },
   };
   const store = core.createStore(broken);
-  assert.equal(store.load().spots.length, 5);
+  assert.equal(store.load().spots.length, core.SPOT_COUNT);
   assert.equal(store.save(core.createInitialState()), false);
 });
 
