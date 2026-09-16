@@ -21,6 +21,7 @@ export const LEGEND = [
   { symbol: '●', dmc: '3805', color: '#D6456E', shade: 'Cyclamen' },
   { symbol: '■', dmc: '783',  color: '#E2A32B', shade: 'Topaz' },
   { symbol: '✦', dmc: '796',  color: '#2F5FD0', shade: 'Royal Blue' },
+  { symbol: '★', dmc: '702',  color: '#3E9B44', shade: 'Kelly Green' },
 ];
 
 /** The wheel takes its size from the legend, so adding an entry adds a wedge. */
@@ -33,6 +34,7 @@ export const STARTER_NAMES = [
   'Koi Pond',
   'Stained Glass Owl',
   'Aurora Cabin',
+  'Hummingbird',
 ];
 
 export function createInitialState() {
@@ -109,9 +111,7 @@ export function hydrate(raw) {
   const spots = base.spots.map((spot, i) => {
     const saved = raw.spots[i];
     const name =
-      saved && typeof saved.name === 'string'
-        ? saved.name.slice(0, MAX_NAME_LENGTH)
-        : spot.name;
+      saved && typeof saved.name === 'string' ? saved.name.slice(0, MAX_NAME_LENGTH) : '';
     return { id: spot.id, name };
   });
   const lastPickId = spots.some((s) => s.id === raw.lastPickId) ? raw.lastPickId : null;

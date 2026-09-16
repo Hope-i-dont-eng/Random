@@ -1,7 +1,7 @@
 {
   "name": "Drill Pick",
   "short_name": "Drill Pick",
-  "description": "A five-spot spinning wheel that picks your next diamond painting and never repeats the last one.",
+  "description": "A six-spot spinning wheel that picks your next diamond painting and never repeats the last one.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

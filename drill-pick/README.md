@@ -1,6 +1,6 @@
 # Drill Pick
 
-A five-spot spinning wheel that picks which diamond painting to work on next,
+A six-spot spinning wheel that picks which diamond painting to work on next,
 and never hands you the same one twice in a row.
 
 Built to live on a phone home screen: no account, no network, no build step.
@@ -8,7 +8,7 @@ Everything you type stays in that phone's own storage.
 
 ## How it works
 
-- Five wedges, one per work-in-progress. Tap **Spin the wheel** (or the wheel itself).
+- Six wedges, one per work-in-progress. Tap **Spin the wheel** (or the wheel itself).
 - The winner is announced under the wheel and remembered as **Last pick**.
 - That winner then **sits out the next spin** — its wedge greys out and its legend
   row is marked, so the exclusion is visible rather than feeling rigged.
@@ -44,6 +44,14 @@ because the code is split into ES modules.
 After the first load the service worker caches everything, so it opens and
 spins with no signal at all.
 
+### Updating an installed copy
+
+No reinstall. The app's own files are fetched network-first, so a merge to
+`main` reaches an installed phone on its next launch with signal; the cache is
+only the offline fallback. Changing `sw.js` itself takes one extra launch: the
+first opens with the old worker still in charge and installs the new one, the
+second shows the new version.
+
 ## Files
 
 | File | Purpose |
@@ -52,7 +60,7 @@ spins with no signal at all.
 | `app.js` | Web renderer — draws the wheel, handles taps, runs the spin animation. |
 | `app.css` | Design tokens and layout, light and dark. |
 | `index.html` | Page shell and service worker registration. |
-| `sw.js` | Offline cache. |
+| `sw.js` | Offline cache, network-first for the app's own files. |
 | `manifest.webmanifest` | Home-screen install metadata. |
 | `tools/make-icons.py` | Regenerates the app icons. Pure Python, no image library. |
 | `tools/test-core.mjs` | Rule checks for `wheel-core.js`. |
@@ -64,8 +72,8 @@ node tools/test-core.mjs
 ```
 
 Covers the no-repeat rule, blank and single-spot edge cases, rename-releases-exclusion,
-storage failures, save/load round-tripping, and that the wedge parked under the
-pointer is genuinely the wedge that was picked.
+storage failures, save/load round-tripping, upgrading a save from a smaller wheel,
+and that the wedge parked under the pointer is genuinely the wedge that was picked.
 
 ## Going native later
 
@@ -76,6 +84,8 @@ thing to swap is the storage backend passed to `createStore` — it expects
 
 ## Changing the wheel
 
-The five colours, symbols and DMC codes live in the `LEGEND` array in
-`wheel-core.js`. Adding a sixth entry there gives you a six-wedge wheel — the
-geometry, the renderer and the rules all read the spot count from that array.
+The colours, symbols and DMC codes live in the `LEGEND` array in
+`wheel-core.js`, and the wheel takes its size from that array — add an entry
+and you get another wedge, with the geometry, the renderer and the rules all
+following. A phone that already has saved names keeps them and shows the new
+spot empty, rather than inventing a name the owner never typed.
