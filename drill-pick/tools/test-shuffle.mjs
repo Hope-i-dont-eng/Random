@@ -1,45 +1,88 @@
+/**
+ * Shuffle-bag ("Until everyone has had a turn") checks:  node tools/test-shuffle.mjs
+ */
 import assert from 'node:assert/strict';
 import * as core from '../wheel-core.js';
 
-function spin(state, rng = Math.random) {
-  const index = core.pick(state, rng);
-  assert.notEqual(index, null);
-  return [core.recordPick(state, index), index];
+function seeded(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
 }
 
-// No project can win twice within a completed round. This includes rounds
-// that share a boundary with the previous round.
-for (let seed = 1; seed <= 100; seed++) {
-  let randomSeed = seed;
-  const rng = () => {
-    randomSeed = (Math.imul(randomSeed, 1664525) + 1013904223) >>> 0;
-    return randomSeed / 4294967296;
-  };
-  let state = core.createInitialState();
-  let previous = null;
-  for (let round = 0; round < 10; round++) {
-    const seen = new Set();
-    for (let n = 0; n < core.SPOT_COUNT; n++) {
-      let index;
-      [state, index] = spin(state, rng);
-      assert.notEqual(index, previous, 'no immediate repeats across round boundaries');
-      assert.equal(seen.has(index), false, 'a project must not repeat within a round');
-      seen.add(index);
-      previous = index;
+function spin(state, rng = Math.random) {
+  const wheel = core.buildWheel(state);
+  const pos = core.pick(state, rng);
+  assert.notEqual(pos, null);
+  return [core.recordPick(state, pos, wheel), wheel[pos]];
+}
+
+// Every name once per round, never twice in a row — at several wheel sizes.
+for (const count of [2, 3, 6, 12]) {
+  for (let seed = 1; seed <= 40; seed++) {
+    const rng = seeded(seed * 31 + count);
+    let state = core.updateSettings(core.createInitialState(), { count });
+    for (let i = 0; i < count; i++) if (!state.spots[i].name) state = core.rename(state, i, 'P' + i);
+    let previous = null;
+    for (let round = 0; round < 8; round++) {
+      const seen = new Set();
+      for (let k = 0; k < count; k++) {
+        let w;
+        [state, w] = spin(state, rng);
+        assert.notEqual(w.id, previous, 'no immediate repeats across round boundaries');
+        assert.equal(seen.has(w.id), false, 'a project must not repeat within a round');
+        seen.add(w.id);
+        previous = w.id;
+      }
+      assert.equal(seen.size, count);
+      assert.deepEqual(state.remainingKeys, [], 'bag is empty at round end');
     }
-    assert.equal(seen.size, core.SPOT_COUNT);
-    assert.deepEqual(state.remainingIds, [], 'bag is empty at round end');
   }
 }
 
-// A saved half-used bag must resume without bringing back already-picked spots.
+// A doubled name gets two turns a round, but never back to back.
+for (let seed = 1; seed <= 200; seed++) {
+  const rng = seeded(seed);
+  let state = core.updateSettings(core.createInitialState(), { count: 3, double: { on: true, ids: ['s1'] } });
+  let previous = null;
+  const tally = {};
+  for (let k = 0; k < 40; k++) {
+    let w;
+    [state, w] = spin(state, rng);
+    assert.notEqual(w.id, previous, 'a doubled name still sits out the next spin');
+    tally[w.id] = (tally[w.id] || 0) + 1;
+    previous = w.id;
+  }
+  assert.ok(tally.s1 > tally.s2 && tally.s1 > tally.s3, 'the doubled name wins more often');
+}
+
+// Spin again landings never use up anyone's turn.
+{
+  const rng = seeded(99);
+  let state = core.updateSettings(core.createInitialState(), { again: { on: true, count: 3 } });
+  let names = 0;
+  const seen = new Set();
+  while (names < core.DEFAULT_COUNT) {
+    let w;
+    [state, w] = spin(state, rng);
+    if (w.kind === 'again') continue;
+    assert.equal(seen.has(w.id), false);
+    seen.add(w.id);
+    names++;
+  }
+  assert.deepEqual(state.remainingKeys, []);
+}
+
+// A saved half-used bag resumes without bringing back already-picked spots.
 {
   let state = core.createInitialState();
   const firstHalf = new Set();
   for (let i = 0; i < 3; i++) {
-    let index;
-    [state, index] = spin(state, () => 0);
-    firstHalf.add(index);
+    let w;
+    [state, w] = spin(state, () => 0);
+    firstHalf.add(w.id);
   }
   const storage = new Map();
   const store = core.createStore({
@@ -48,78 +91,39 @@ for (let seed = 1; seed <= 100; seed++) {
   });
   assert.equal(store.save(state), true);
   state = store.load();
-  assert.equal(state.remainingIds.length, 3);
+  assert.equal(state.remainingKeys.length, 3);
   for (let i = 0; i < 3; i++) {
-    let index;
-    [state, index] = spin(state, () => 0);
-    assert.equal(firstHalf.has(index), false, 'a reload must not refill the bag');
+    let w;
+    [state, w] = spin(state, () => 0);
+    assert.equal(firstHalf.has(w.id), false, 'a reload must not refill the bag');
   }
-  assert.deepEqual(state.remainingIds, []);
+  assert.deepEqual(state.remainingKeys, []);
 }
 
-// Existing v1 users keep names and the last winner. The upgrade starts a new
-// shuffle round rather than resetting projects or losing the no-repeat rule.
+// v2 saves keep their half-used bag.
 {
   const state = core.hydrate({
-    version: 1,
+    version: 2,
     seeded: false,
-    spots: [
-      { id: 's1', name: 'One' },
-      { id: 's2', name: 'Two' },
-      { id: 's3', name: 'Three' },
-      { id: 's4', name: 'Four' },
-      { id: 's5', name: 'Five' },
-    ],
-    lastPickId: 's3',
-  });
-  assert.equal(state.version, core.SCHEMA_VERSION);
-  assert.deepEqual(state.spots.map((spot) => spot.name), ['One', 'Two', 'Three', 'Four', 'Five', '']);
-  assert.equal(state.lastPickId, 's3');
-  assert.deepEqual(state.remainingIds, []);
-  assert.equal(core.eligibleIndices(state).includes(2), false);
-}
-
-// Editing names resets the round, and blank spots never appear in the bag.
-{
-  let state = core.createInitialState();
-  state = core.rename(state, 5, '');
-  let index;
-  [state, index] = spin(state, () => 0);
-  assert.equal(state.remainingIds.length, 4);
-  assert.equal(state.remainingIds.includes('s6'), false);
-  const lastId = state.lastPickId;
-  state = core.rename(state, 4, 'New project');
-  assert.deepEqual(state.remainingIds, []);
-  assert.equal(state.lastPickId, lastId);
-  assert.equal(core.eligibleIndices(state).includes(index), false);
-  state = core.rename(state, index, 'Another project');
-  assert.equal(state.lastPickId, null);
-  assert.equal(core.eligibleIndices(state).includes(index), true);
-}
-
-// Corrupted or stale IDs cannot make a saved wheel skip or duplicate projects.
-{
-  const state = core.createInitialState();
-  const restored = core.hydrate({
-    ...state,
+    spots: ['A', 'B', 'C', 'D', 'E', 'F'].map((name, i) => ({ id: 's' + (i + 1), name })),
     lastPickId: 's1',
     remainingIds: ['s2', 's2', 'missing', 's1', 's3'],
   });
-  assert.deepEqual(restored.remainingIds, ['s2', 's3']);
-  assert.deepEqual(core.eligibleIndices(restored), [1, 2]);
+  assert.equal(state.version, core.SCHEMA_VERSION);
+  assert.deepEqual(state.remainingKeys, ['s2', 's3']);
+  assert.deepEqual(core.eligibleIndices(state), [1, 2]);
 }
 
-// One named project can still win; no named projects means no spin.
+// Editing names or changing options starts a fresh round.
 {
   let state = core.createInitialState();
-  for (let i = 1; i < core.SPOT_COUNT; i++) state = core.rename(state, i, '');
-  for (let i = 0; i < 5; i++) {
-    let index;
-    [state, index] = spin(state, () => 0);
-    assert.equal(index, 0);
-  }
-  state = core.rename(state, 0, '');
-  assert.equal(core.pick(state), null);
+  [state] = spin(state, () => 0);
+  assert.equal(state.remainingKeys.length, core.DEFAULT_COUNT - 1);
+  assert.deepEqual(core.rename(state, 4, 'New project').remainingKeys, []);
+  assert.deepEqual(core.updateSettings(state, { count: 7 }).remainingKeys, []);
+  assert.equal(core.updateSettings(state, { again: { on: true } }).remainingKeys.length,
+    core.DEFAULT_COUNT - 1, 'adding spin again spaces keeps the round');
+  assert.equal(core.shuffle(state).remainingKeys.length, core.DEFAULT_COUNT - 1, 'shuffling keeps the round');
 }
 
-console.log('Shuffle bag checks passed (100 seeded runs × 10 rounds, plus edge cases)');
+console.log('Shuffle bag checks passed (sizes 2–12, doubles, spin again, saves)');

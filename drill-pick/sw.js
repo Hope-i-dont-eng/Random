@@ -5,7 +5,7 @@
  * is the offline fallback, and also covers a slow connection through the
  * timeout below. Fonts and icons never change, so those stay cache-first.
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = 'drill-pick-' + VERSION;
 const NETWORK_TIMEOUT = 3000;
 

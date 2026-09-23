@@ -1,14 +1,14 @@
 # Drill Pick
 
-A six-spot spinning wheel that picks which diamond painting to work on next,
-and never hands you the same one twice in a row.
+A spinning wheel that picks which diamond painting to work on next,
+and (unless you switch it off) never hands you the same one twice in a row.
 
 Built to live on a phone home screen: no account, no network, no build step.
 Everything you type stays in that phone's own storage.
 
 ## How it works
 
-- Six wedges, one per work-in-progress. Tap **Spin the wheel** (or the wheel itself).
+- One wedge per work-in-progress (six to start). Tap **Spin the wheel** (or the wheel itself).
 - The winner is announced under the wheel and remembered as **Last pick**.
 - That winner then **sits out the next spin** — its wedge greys out and its legend
   row is marked, so the exclusion is visible rather than feeling rigged.
@@ -16,6 +16,25 @@ Everything you type stays in that phone's own storage.
   releases it, because a new name means a different project.
 - Blank spots are skipped. With only one spot named, it can win every time —
   there's nothing to rotate against.
+
+### Wheel options
+
+Open **Wheel options** under the spin button. Each switch shows its dropdowns
+once it's turned on, and everything is saved on the phone.
+
+- **Choices on the wheel** — 2 to 12 spots. Shrinking the wheel hides the extra
+  spots but keeps their names for when you grow it again.
+- **Skip last pick** — on by default. Pick how long a winner sits out:
+  *until everyone has had a turn* (the original rounds), *just the last pick*,
+  or *the last 2 picks*. Off means any name can win any spin.
+- **Double a name (2×)** — choose how many names (1–3), then which ones. Each gets
+  a second wedge across the wheel from the first, so twice the chance. In
+  rounds mode a doubled name gets two turns per round, never back to back.
+- **Spin again space** — 1–3 dark ↻ wedges. Landing on one doesn't count as a
+  pick; just spin again.
+
+The **Shuffle** button next to Spin rearranges the names around the wheel.
+Winners, sitting-out marks and doubles follow their names.
 
 Each spot carries a legend symbol and a DMC code the way a real canvas legend
 identifies a drill colour, so a wedge stays recognisable when the name is too
@@ -69,6 +88,7 @@ second shows the new version.
 
 ```bash
 node tools/test-core.mjs
+node tools/test-shuffle.mjs
 ```
 
 Covers the no-repeat rule, blank and single-spot edge cases, rename-releases-exclusion,
@@ -85,7 +105,6 @@ thing to swap is the storage backend passed to `createStore` — it expects
 ## Changing the wheel
 
 The colours, symbols and DMC codes live in the `LEGEND` array in
-`wheel-core.js`, and the wheel takes its size from that array — add an entry
-and you get another wedge, with the geometry, the renderer and the rules all
-following. A phone that already has saved names keeps them and shows the new
+`wheel-core.js`, and its length is the most spots the wheel can hold — add an
+entry and the **Choices** dropdown goes one higher. A phone that already has saved names keeps them and shows the new
 spot empty, rather than inventing a name the owner never typed.
