@@ -6,12 +6,13 @@
  * backend differ between platforms.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const MAX_NAME_LENGTH = 40;
+// Keep the existing storage key so upgrading does not lose names or last pick.
 export const STORAGE_KEY = 'drillpick.v1';
 
 /**
- * The five wheel spots, in wheel order. Each carries a legend symbol and a DMC
+ * The six wheel spots, in wheel order. Each carries a legend symbol and a DMC
  * code the way a real diamond painting canvas identifies its drill colours, so
  * a spot stays recognisable even when its wedge is too narrow for the name.
  */
@@ -43,24 +44,38 @@ export function createInitialState() {
     seeded: true,
     spots: LEGEND.map((_, i) => ({ id: 's' + (i + 1), name: STARTER_NAMES[i] || '' })),
     lastPickId: null,
+    // Unpicked project IDs in the current round. An empty bag starts a new round.
+    remainingIds: [],
   };
 }
 
-/** Spots that can win the next spin: named, and not the previous winner. */
+/**
+ * Every named project is picked once per round, in random order. During a round,
+ * only projects remaining in the bag can win. At a round boundary, the previous
+ * winner is excluded from the FIRST draw, but goes back into the new bag after
+ * that draw so all named projects still get one turn in the new round.
+ */
 export function eligibleIndices(state) {
   const named = [];
   for (let i = 0; i < state.spots.length; i++) {
     if (state.spots[i].name.trim() !== '') named.push(i);
   }
-  if (named.length <= 1) return named; // nothing left to rotate against
-  const fresh = named.filter((i) => state.spots[i].id !== state.lastPickId);
-  return fresh.length ? fresh : named;
+  if (named.length <= 1) return named;
+
+  if (Array.isArray(state.remainingIds) && state.remainingIds.length) {
+    const remaining = new Set(state.remainingIds);
+    const eligible = named.filter((i) => remaining.has(state.spots[i].id));
+    if (eligible.length) return eligible;
+  }
+
+  // A new round cannot immediately repeat the previous round's final pick.
+  return named.filter((i) => state.spots[i].id !== state.lastPickId);
 }
 
-/** True when this spot is being held out of the next spin. */
+/** True for a named spot that has already won this round (or the last winner). */
 export function isSittingOut(state, index) {
-  if (state.spots[index].id !== state.lastPickId) return false;
-  return eligibleIndices(state).indexOf(index) === -1;
+  const spot = state.spots[index];
+  return Boolean(spot && spot.name.trim() && !eligibleIndices(state).includes(index));
 }
 
 export function canSpin(state) {
@@ -72,7 +87,7 @@ export function lastPickIndex(state) {
   return state.spots.findIndex((s) => s.id === state.lastPickId);
 }
 
-/** Choose a winning spot index, or null when nothing is eligible. */
+/** Choose a winning spot index uniformly from the current bag. */
 export function pick(state, rng = Math.random) {
   const pool = eligibleIndices(state);
   if (!pool.length) return null;
@@ -80,13 +95,21 @@ export function pick(state, rng = Math.random) {
   return pool[Math.min(Math.max(roll, 0), pool.length - 1)];
 }
 
+/** Consume a winning project from the bag; begin a fresh bag when one is empty. */
 export function recordPick(state, index) {
-  return { ...state, lastPickId: state.spots[index].id };
+  const chosen = state.spots[index];
+  if (!chosen) return state;
+  const remainingIds = state.remainingIds && state.remainingIds.length
+    ? state.remainingIds.filter((id) => id !== chosen.id)
+    : state.spots
+        .filter((spot) => spot.name.trim() !== '' && spot.id !== chosen.id)
+        .map((spot) => spot.id);
+  return { ...state, lastPickId: chosen.id, remainingIds };
 }
 
 /**
- * Rename a spot. Renaming means a different project, so a spot that was sitting
- * out is released back into the next spin.
+ * Editing a name changes the set of projects, so it starts a fresh round.
+ * The previous winner still sits out the first draw unless it was renamed.
  */
 export function rename(state, index, name) {
   const clean = String(name).slice(0, MAX_NAME_LENGTH);
@@ -99,14 +122,15 @@ export function rename(state, index, name) {
     spots,
     seeded: false,
     lastPickId: released ? null : state.lastPickId,
+    remainingIds: [],
   };
 }
 
-/** Rebuild a trustworthy state from whatever was in storage. */
+/** Rebuild a trustworthy state from either the old or current saved schema. */
 export function hydrate(raw) {
   const base = createInitialState();
   if (!raw || typeof raw !== 'object') return base;
-  if (raw.version !== SCHEMA_VERSION || !Array.isArray(raw.spots)) return base;
+  if ((raw.version !== 1 && raw.version !== SCHEMA_VERSION) || !Array.isArray(raw.spots)) return base;
 
   const spots = base.spots.map((spot, i) => {
     const saved = raw.spots[i];
@@ -115,8 +139,17 @@ export function hydrate(raw) {
     return { id: spot.id, name };
   });
   const lastPickId = spots.some((s) => s.id === raw.lastPickId) ? raw.lastPickId : null;
+  const namedIds = new Set(spots.filter((spot) => spot.name.trim()).map((spot) => spot.id));
+  const remainingIds = [];
+  if (raw.version === SCHEMA_VERSION && Array.isArray(raw.remainingIds)) {
+    for (const id of raw.remainingIds) {
+      if (namedIds.has(id) && id !== lastPickId && !remainingIds.includes(id)) {
+        remainingIds.push(id);
+      }
+    }
+  }
 
-  return { version: SCHEMA_VERSION, seeded: raw.seeded === true, spots, lastPickId };
+  return { version: SCHEMA_VERSION, seeded: raw.seeded === true, spots, lastPickId, remainingIds };
 }
 
 /**
